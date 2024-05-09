@@ -83,7 +83,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     from: "etok.us",
     to: email,
     subject: "Email verification",
-    text: `Please click on the following link to verify your email : https://etok-ef21c0e14609.herokuapp.com/:3000/verify/${verificationToken}`,
+    text: `Please click on the following link to verify your email : https://etok-ef21c0e14609.herokuapp.com:3000/verify/${verificationToken}`,
   };
 
   //send the mail
