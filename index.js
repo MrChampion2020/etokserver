@@ -83,7 +83,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     from: "etok.us",
     to: email,
     subject: "Email verification",
-    text: `Please click on the following link to verify your email : https://etok-ef21c0e14609.herokuapp.com:3000/verify/${verificationToken}`,
+    text: `Please click on the following link to verify your email : https://192.168.137.40:3000/verify/${verificationToken}`,
   };
 
   //send the mail
@@ -126,7 +126,7 @@ const generateSecretKey = () => {
 const secretKey = generateSecretKey();
 
 
-// Generate a random secret key
+/* // Generate a random secret key
 const secretKeys = crypto.randomBytes(64).toString('hex');
 console.log(secretKeys);
 
@@ -136,7 +136,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 10 * 60 * 1000 } // 10 minutes in milliseconds
-}));
+}));*/
 
 //endpoint to login
 app.post("/login", async (req, res) => {
