@@ -125,19 +125,6 @@ const generateSecretKey = () => {
 
 const secretKey = generateSecretKey();
 
-
-/* // Generate a random secret key
-const secretKeys = crypto.randomBytes(64).toString('hex');
-console.log(secretKeys);
-
-//session timeout
-app.use(session({
-  secret: secretKeys,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 10 * 60 * 1000 } // 10 minutes in milliseconds
-}));*/
-
 //endpoint to login
 app.post("/login", async (req, res) => {
   try {
