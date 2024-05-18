@@ -3,7 +3,6 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
-const session = require('express-session');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -80,10 +79,10 @@ const sendVerificationEmail = async (email, verificationToken) => {
   });
 
   const mailOptions = {
-    from: "etok.us",
+    from: "Etok.us",
     to: email,
     subject: "Email verification",
-    text: `Please click on the following link to verify your email : https://192.168.137.40:3000/verify/${verificationToken}`,
+    text: `Please click on the following link to verify your email : http://etok-ef21c0e14609.herokuapp.com:3000/verify/${verificationToken}`,
   };
 
   //send the mail
@@ -124,19 +123,6 @@ const generateSecretKey = () => {
 };
 
 const secretKey = generateSecretKey();
-
-
-/* // Generate a random secret key
-const secretKeys = crypto.randomBytes(64).toString('hex');
-console.log(secretKeys);
-
-//session timeout
-app.use(session({
-  secret: secretKeys,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 10 * 60 * 1000 } // 10 minutes in milliseconds
-}));*/
 
 //endpoint to login
 app.post("/login", async (req, res) => {
@@ -545,9 +531,3 @@ app.post("/delete",async(req,res) => {
         res.status(500).json({message:"Internal server error",error})
     }
 })
-
-
-
-
-
-
