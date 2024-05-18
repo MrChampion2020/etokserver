@@ -1,7 +1,11 @@
 {
   "name": "express",
   "version": "1.0.0",
+<<<<<<< HEAD
   "description": "back end to etok",
+=======
+  "description": "back end",
+>>>>>>> 1d1452e2643fa89d008fea16e1462f205aadc974
   "main": "index.js",
   "devDependencies": {},
   "scripts": {
