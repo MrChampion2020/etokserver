@@ -9,14 +9,11 @@
   },
   "author": "",
   "license": "ISC",
-<<<<<<< HEAD
-=======
 
   "engines": {
   "node": "v20.11.1"
 },
-  
->>>>>>> e28d05f758f16819a3c0da9376bf42f0f2c473b0
+
   "dependencies": {
     "axios": "^1.6.8",
     "bcryptjs": "^2.4.3",
