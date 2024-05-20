@@ -49,7 +49,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     from: "Etok.us",
     to: email,
     subject: "Email Verification",
-    text: `Please click on the following link to verify your email: http://localhost:${port}/verify/${verificationToken}`,
+    text: `Please click on the following link to verify your email: http://express-vdh7.onrender.com:${port}/verify/${verificationToken}`,
   };
 
   try {
