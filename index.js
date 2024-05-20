@@ -1,4 +1,4 @@
-/*const express = require("express");
+const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
@@ -6,12 +6,14 @@ const nodemailer = require("nodemailer");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
+
+const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 
 require('dotenv').config();
 
-const app = express();
+
 const port = process.env.PORT || 3000;
 
 const User = require("./models/user");
@@ -47,7 +49,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     from: "Etok.us",
     to: email,
     subject: "Email Verification",
-    text: `Please click on the following link to verify your email: http://localhost:3000/verify/${verificationToken}`,
+    text: `Please click on the following link to verify your email: http://localhost:${port}/verify/${verificationToken}`,
   };
 
   try {
@@ -307,7 +309,7 @@ module.exports = app;
 
 
 
-*/
+/*
 
 
 
@@ -318,7 +320,7 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 const cors = require("cors");
 
 const http = require("http").createServer(app);
@@ -794,7 +796,7 @@ io.on("connection", (socket) => {
     } catch (error) {
       console.log("Error handling the messages");
     }
-    socket.on("disconnet", () => {
+    socket.on("disconnect", () => {
       console.log("user disconnected");
     });
   });
@@ -845,3 +847,4 @@ app.post("/delete",async(req,res) => {
     }
 })
 
+*/
