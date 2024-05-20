@@ -1,4 +1,4 @@
-const express = require("express");
+/*const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
@@ -307,7 +307,11 @@ module.exports = app;
 
 
 
-/*const express = require("express");
+*/
+
+
+
+const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
@@ -391,7 +395,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     from: "Etok.us",
     to: email,
     subject: "Email verification",
-    text: `Please click on the following link to verify your email : http://etok-ef21c0e14609.herokuapp.com:3000/verify/${verificationToken}`,
+    text: `Please click on the following link to verify your email : http://localhost:3000/verify/${verificationToken}`,
   };
 
   //send the mail
@@ -840,4 +844,4 @@ app.post("/delete",async(req,res) => {
         res.status(500).json({message:"Internal server error",error})
     }
 })
-*/
+
