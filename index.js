@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
@@ -314,8 +314,6 @@ module.exports = app;
 
 
 
-=======
->>>>>>> d447bdd2d78ed8fba11476ded2478e0e3e29f94c
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
