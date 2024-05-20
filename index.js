@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
@@ -17,7 +16,7 @@ require('dotenv').config();
 
 const port = process.env.PORT || 3000;
 
-const User = require("./models/user");
+const User = require("./models/User");
 const Chat = require("./models/message");
 
 app.use(cors());
@@ -314,8 +313,8 @@ module.exports = app;
 
 
 
-=======
->>>>>>> d447bdd2d78ed8fba11476ded2478e0e3e29f94c
+
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
