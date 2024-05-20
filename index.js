@@ -17,7 +17,7 @@ require('dotenv').config();
 
 const port = process.env.PORT || 3000;
 
-const User = require("./models/user");
+const User = require("./models/User");
 const Chat = require("./models/message");
 
 app.use(cors());
