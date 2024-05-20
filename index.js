@@ -1,5 +1,5 @@
 
-const express = require("express");
+/*const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
@@ -309,8 +309,7 @@ module.exports = app;
 
 
 
-
-/*
+*/
 
 
 
@@ -319,13 +318,20 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
+const bcrypt = require("bcryptjs");
 
 const app = express();
-const port = process.env.PORT || 3000;
+
 const cors = require("cors");
 
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
+
+const jwt = require("jsonwebtoken");
+const cors = require("cors");
+
+const port = process.env.PORT || 3000;
+
 
 app.use(cors());
 
@@ -333,11 +339,11 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 const jwt = require("jsonwebtoken");
-const User = require("./models/user");
+const User = require("./models/User");
 const Chat = require("./models/message");
 
 mongoose
-  .connect("mongodb+srv://etok:etokdb@etok.a9jvrbt.mongodb.net/")
+  .connect("process.env.MONGODB_URI")
   .then(() => {
     console.log("Connected to MongoDB");
   })
@@ -389,8 +395,8 @@ const sendVerificationEmail = async (email, verificationToken) => {
   const transpoter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: "kingedendgreat2017@gmail.com",
-      pass: "fmnwzwnaljykztxv",
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
     },
   });
 
@@ -398,7 +404,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     from: "Etok.us",
     to: email,
     subject: "Email verification",
-    text: `Please click on the following link to verify your email : http://localhost:3000/verify/${verificationToken}`,
+    text: `Please click on the following link to verify your email : http://express-vdh7.onrender.com:${port}/verify/${verificationToken}`,
   };
 
   //send the mail
