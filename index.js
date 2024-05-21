@@ -6,7 +6,6 @@ const nodemailer = require("nodemailer");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
-import { API_URL } from './config';
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
