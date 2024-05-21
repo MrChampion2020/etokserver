@@ -48,8 +48,8 @@ const sendVerificationEmail = async (email, verificationToken) => {
     from: "Etok.us",
     to: email,
     subject: "Email Verification",
-    text: `Please click on the following link to verify your email: ${API_URL}:${port}/verify/${verificationToken}`,
-    html: `<p>Please click on the following link to verify your email: <a href="${API_URL}:${PORT}/verify/${verificationToken}">${API_URL}:${PORT}/verify/${verificationToken}</a></p>`,
+    text: `Please click on the following link to verify your email: ${API_URL}/verify/${verificationToken}`,
+    html: `<p>Please click on the following link to verify your email: <a href="${API_URL}/verify/${verificationToken}">${API_URL}/verify/${verificationToken}</a></p>`,
   };
 
   try {
