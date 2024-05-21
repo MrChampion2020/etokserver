@@ -43,7 +43,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
       pass: process.env.EMAIL_PASS,
     },
   });
-
+  const API_URL = process.env.API_URL;
   const mailOptions = {
     from: "Etok.us",
     to: email,
