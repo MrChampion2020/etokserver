@@ -527,7 +527,7 @@ app.post("/delete",async(req,res) => {
         res.status(500).json({message:"Internal server error",error})
     }
 })
-
+/*
 // Route to initialize payment
 router.post('/pay', async (req, res) => {
   const { userId, amount } = req.body;
@@ -549,7 +549,7 @@ router.post('/verify-payment', async (req, res) => {
       res.status(500).json({ success: false, message: error.message });
   }
 });
-module.exports = router;
+module.exports = router;*/
 
 module.exports = app;
 
