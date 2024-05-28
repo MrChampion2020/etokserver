@@ -9,7 +9,8 @@ const cors = require("cors");
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
-
+const { handlePayment, verifyPayment } = require('./payment');
+const router = express.Router();
 require('dotenv').config();
 
 
@@ -17,6 +18,9 @@ const port = process.env.PORT || 3000;
 
 const User = require("./models/User");
 const Chat = require("./models/message");
+
+//Middleware to parse JSON
+app.use(express.json());
 
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -130,6 +134,7 @@ app.post("/login", async (req, res) => {
     res.status(500).json({ message: "Login failed", error });
   }
 });
+
 
 // Update user gender endpoint
 app.put("/users/:userId/gender", async (req, res) => {
@@ -265,6 +270,29 @@ app.post("/users/:userId/profile-images", async (req, res) => {
   }
 });
 
+/*
+app.post("/users/:userId/profile-images", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { imageUrl } = req.body;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.profileImages.push(imageUrl);
+
+    await user.save();
+
+    return res.status(200).json({ message: "Image has been added", user });
+  } catch (error) {
+    res.status(500).json({ message: "Error addding the profile images" });
+  }
+});*/
+
+
 // Remove profile image endpoint
 app.delete("/users/:userId/profile-images/:imageId", async (req, res) => {
   try {
@@ -301,6 +329,227 @@ io.on("connection", (socket) => {
     console.log("A user disconnected");
   });
 });
+
+
+//endpoint to fetch all the profiles for a particular user
+app.get("/profiles", async (req, res) => {
+  const { userId, gender, turnOns, lookingFor } = req.query;
+
+  try {
+    let filter = { gender: gender === "male" ? "female" : "male" }; // For gender filtering
+
+    // Add filtering based on turnOns and lookingFor arrays
+    if (turnOns) {
+      filter.turnOns = { $in: turnOns };
+    }
+
+    if (lookingFor) {
+      filter.lookingFor = { $in: lookingFor };
+    }
+
+    const currentUser = await User.findById(userId)
+      .populate("matches", "_id")
+      .populate("crushes", "_id");
+
+    // Extract IDs of friends
+    const friendIds = currentUser.matches.map((friend) => friend._id);
+
+    // Extract IDs of crushes
+    const crushIds = currentUser.crushes.map((crush) => crush._id);
+
+    const profiles = await User.find(filter)
+      .where("_id")
+      .nin([userId, ...friendIds, ...crushIds]);
+
+    return res.status(200).json({ profiles });
+  } catch (error) {
+    return res.status(500).json({ message: "Error fetching profiles", error });
+  }
+});
+
+app.post("/send-like", async (req, res) => {
+  const { currentUserId, selectedUserId } = req.body;
+
+  try {
+    //update the recepient's friendRequestsArray!
+    await User.findByIdAndUpdate(selectedUserId, {
+      $push: { recievedLikes: currentUserId },
+    });
+    //update the sender's sentFriendRequests array
+    await User.findByIdAndUpdate(currentUserId, {
+      $push: { crushes: selectedUserId },
+    });
+
+    res.sendStatus(200);
+  } catch (error) {
+    res.sendStatus(500);
+  }
+});
+
+//ednpoint to get the details of the received Likes
+app.get("/received-likes/:userId/details", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Fetch details of users who liked the current user
+    const receivedLikesDetails = [];
+    for (const likedUserId of user.recievedLikes) {
+      const likedUser = await User.findById(likedUserId);
+      if (likedUser) {
+        receivedLikesDetails.push(likedUser);
+      }
+    }
+
+    res.status(200).json({ receivedLikesDetails });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching received likes details",
+      error: error.message,
+    });
+  }
+});
+
+//endpoint to create a match betweeen two people
+app.post("/create-match", async (req, res) => {
+  try {
+    const { currentUserId, selectedUserId } = req.body;
+
+    //update the selected user's crushes array and the matches array
+    await User.findByIdAndUpdate(selectedUserId, {
+      $push: { matches: currentUserId },
+      $pull: { crushes: currentUserId },
+    });
+
+    //update the current user's matches array recievedlikes array
+    await User.findByIdAndUpdate(currentUserId, {
+      $push: { matches: selectedUserId },
+      $pull: { recievedLikes: selectedUserId },
+    });
+
+    res.sendStatus(200);
+  } catch (error) {
+    res.status(500).json({ message: "Error creating a match", error });
+  }
+});
+
+//endpoint to get all the matches of the particular user
+app.get("/users/:userId/matches", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const matchIds = user.matches;
+
+    const matches = await User.find({ _id: { $in: matchIds } });
+
+    res.status(200).json({ matches });
+  } catch (error) {
+    res.status(500).json({ message: "Error retrieving the matches", error });
+  }
+});
+
+io.on("connection", (socket) => {
+  console.log("a user is connected");
+
+  socket.on("sendMessage", async (data) => {
+    try {
+      const { senderId, receiverId, message } = data;
+
+      console.log("data", data);
+
+      const newMessage = new Chat({ senderId, receiverId, message });
+      await newMessage.save();
+
+      //emit the message to the receiver
+      io.to(receiverId).emit("receiveMessage", newMessage);
+    } catch (error) {
+      console.log("Error handling the messages");
+    }
+    socket.on("disconnet", () => {
+      console.log("user disconnected");
+    });
+  });
+});
+
+http.listen(8000, () => {
+  console.log("Socket.IO server running on port 8000");
+});
+
+app.get("/messages", async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.query;
+
+    console.log(senderId);
+    console.log(receiverId);
+
+    const messages = await Chat.find({
+      $or: [
+        { senderId: senderId, receiverId: receiverId },
+        { senderId: receiverId, receiverId: senderId },
+      ],
+    }).populate("senderId", "_id name");
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ message: "Error in getting messages", error });
+  }
+});
+
+
+//endpoint to delete the messages;
+
+app.post("/delete",async(req,res) => {
+    try{
+        const {messages} = req.body;
+
+        if(!Array.isArray(messages) || messages.length == 0){
+            return res.status(400).json({message:"Invalid request body"})
+        };
+
+        for(const messageId of messages){
+            await Chat.findByIdAndDelete(messageId);
+        }
+
+        res.status(200).json({message:"Messages delted successfully!"})
+    } catch(error){
+        res.status(500).json({message:"Internal server error",error})
+    }
+})
+
+// Route to initialize payment
+router.post('/pay', async (req, res) => {
+  const { userId, amount } = req.body;
+  try {
+      const paymentLink = await handlePayment(userId, amount);
+      res.json({ success: true, paymentLink });
+  } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Route to verify payment
+router.post('/verify-payment', async (req, res) => {
+  const { transactionId } = req.body;
+  try {
+      const result = await verifyPayment(transactionId);
+      res.json(result);
+  } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+  }
+});
+module.exports = router;
 
 module.exports = app;
 
