@@ -9,7 +9,7 @@ const cors = require("cors");
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
-const { handlePayment, verifyPayment } = require('./payment');
+/*const { handlePayment, verifyPayment } = require('./payment');*/
 const router = express.Router();
 require('dotenv').config();
 
