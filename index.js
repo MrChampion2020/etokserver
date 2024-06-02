@@ -9,23 +9,20 @@ const cors = require("cors");
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
-/*const { handlePayment, verifyPayment } = require('./payment');*/
-const router = express.Router();
 require('dotenv').config();
-
 
 const port = process.env.PORT || 3000;
 
 const User = require("./models/User");
 const Chat = require("./models/message");
 
-//Middleware to parse JSON
+// Middleware to parse JSON and URL-encoded data
 app.use(express.json());
-
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
+// MongoDB connection
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
@@ -35,10 +32,11 @@ mongoose
     console.log("Error connecting to MongoDB:", error);
   });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+// Generate a secret key for JWT
+const generateSecretKey = () => crypto.randomBytes(32).toString("hex");
+const secretKey = generateSecretKey();
 
+// Send verification email function
 const sendVerificationEmail = async (email, verificationToken) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -53,7 +51,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     to: email,
     subject: "Email Verification",
     text: `Please click on the following link to verify your email: ${API_URL}/verify/${verificationToken}`,
-    html: `<p>Please click on the following link to verify your email: <a href="${API_URL}/verify/${verificationToken}">${API_URL}/verify/${verificationToken}</a></p>`,
+    html: `<p style="background-color: purple; color: white; text-decoration: none; font-size: 20; margin: 20px auto; width: 70%; ">Please click on the following link to verify your email: <a href="${API_URL}/verify/${verificationToken}">${API_URL}/verify/${verificationToken}</a>VERIFY</p>`,
   };
 
   try {
@@ -62,12 +60,6 @@ const sendVerificationEmail = async (email, verificationToken) => {
     console.log("Error sending the verification email:", error);
   }
 };
-
-const generateSecretKey = () => {
-  return crypto.randomBytes(32).toString("hex");
-};
-
-const secretKey = generateSecretKey();
 
 // Registration endpoint
 app.post("/register", async (req, res) => {
@@ -80,7 +72,6 @@ app.post("/register", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const newUser = new User({
       name,
       email,
@@ -89,7 +80,7 @@ app.post("/register", async (req, res) => {
     });
 
     await newUser.save();
-    sendVerificationEmail(newUser.email, newUser.verificationToken);
+    await sendVerificationEmail(newUser.email, newUser.verificationToken);
 
     res.status(200).json({ message: "User registered successfully", userId: newUser._id });
   } catch (error) {
@@ -135,8 +126,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-
-// Update user gender endpoint
+// Update user endpoints
 app.put("/users/:userId/gender", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -153,7 +143,26 @@ app.put("/users/:userId/gender", async (req, res) => {
   }
 });
 
-// Update user description endpoint
+//updating user name
+app.put("/users:userId/name", async (req, res) => {
+
+  try{
+    const { userId } =req.params;
+    const { name } = req.body;
+
+    const user = await User.findByIdAndUpdate(userId, { name }, { new: true } );
+
+    if (!user){
+
+      return res.status(404).json({message: "User not found"});
+    }
+
+    res.status(200).json({ message: "User name updated successfully" });
+  }catch (error){
+    res.status(500).json({ message: "user name update Failed", error});
+  }
+});
+
 app.put("/users/:userId/description", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -170,7 +179,6 @@ app.put("/users/:userId/description", async (req, res) => {
   }
 });
 
-// Fetch user data endpoint
 app.get("/users/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -185,7 +193,7 @@ app.get("/users/:userId", async (req, res) => {
   }
 });
 
-// Add turn-on for a user endpoint
+// Add and remove turn-ons endpoints
 app.put("/users/:userId/turn-ons/add", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -202,7 +210,6 @@ app.put("/users/:userId/turn-ons/add", async (req, res) => {
   }
 });
 
-// Remove turn-on for a user endpoint
 app.put("/users/:userId/turn-ons/remove", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -219,7 +226,7 @@ app.put("/users/:userId/turn-ons/remove", async (req, res) => {
   }
 });
 
-// Add lookingFor for a user endpoint
+// Add and remove looking-for endpoints
 app.put("/users/:userId/looking-for", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -236,7 +243,6 @@ app.put("/users/:userId/looking-for", async (req, res) => {
   }
 });
 
-// Remove lookingFor for a user endpoint
 app.put("/users/:userId/looking-for/remove", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -253,75 +259,19 @@ app.put("/users/:userId/looking-for/remove", async (req, res) => {
   }
 });
 
-// Add profile image endpoint
-app.post("/users/:userId/profile-images", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { profileImage } = req.body;
-
-    const user = await User.findByIdAndUpdate(userId, { $push: { profileImages: profileImage } }, { new: true });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.status(200).json({ message: "Profile image added successfully", user });
-  } catch (error) {
-    res.status(500).json({ message: "Error adding profile image", error });
-  }
-});
-
-/*
-app.post("/users/:userId/profile-images", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { imageUrl } = req.body;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    user.profileImages.push(imageUrl);
-
-    await user.save();
-
-    return res.status(200).json({ message: "Image has been added", user });
-  } catch (error) {
-    res.status(500).json({ message: "Error addding the profile images" });
-  }
-});*/
-
-
-// Remove profile image endpoint
-app.delete("/users/:userId/profile-images/:imageId", async (req, res) => {
-  try {
-    const { userId, imageId } = req.params;
-
-    const user = await User.findByIdAndUpdate(userId, { $pull: { profileImages: { _id: imageId } } }, { new: true });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.status(200).json({ message: "Profile image removed successfully", user });
-  } catch (error) {
-    res.status(500).json({ message: "Error removing profile image", error });
-  }
-});
-
-// Socket.io configuration for chat functionality
+// Chat and socket.io configuration
 io.on("connection", (socket) => {
   console.log("A user connected");
 
   socket.on("sendMessage", async (data) => {
-    const { senderId, receiverId, message } = data;
-    const newMessage = new Chat({ senderId, receiverId, message });
-
     try {
+      const { senderId, receiverId, message } = data;
+      const newMessage = new Chat({ senderId, receiverId, message });
       await newMessage.save();
-      io.emit("receiveMessage", newMessage);
+
+      io.to(receiverId).emit("receiveMessage", newMessage);
     } catch (error) {
-      console.log("Error saving chat message:", error);
+      console.log("Error sending message:", error);
     }
   });
 
@@ -330,776 +280,35 @@ io.on("connection", (socket) => {
   });
 });
 
-
-//endpoint to fetch all the profiles for a particular user
-app.get("/profiles", async (req, res) => {
-  const { userId, gender, turnOns, lookingFor } = req.query;
-
+// Like and match endpoints
+app.post("/like", async (req, res) => {
   try {
-    let filter = { gender: gender === "male" ? "female" : "male" }; // For gender filtering
+    const { userId, likedUserId } = req.body;
 
-    // Add filtering based on turnOns and lookingFor arrays
-    if (turnOns) {
-      filter.turnOns = { $in: turnOns };
-    }
-
-    if (lookingFor) {
-      filter.lookingFor = { $in: lookingFor };
-    }
-
-    const currentUser = await User.findById(userId)
-      .populate("matches", "_id")
-      .populate("crushes", "_id");
-
-    // Extract IDs of friends
-    const friendIds = currentUser.matches.map((friend) => friend._id);
-
-    // Extract IDs of crushes
-    const crushIds = currentUser.crushes.map((crush) => crush._id);
-
-    const profiles = await User.find(filter)
-      .where("_id")
-      .nin([userId, ...friendIds, ...crushIds]);
-
-    return res.status(200).json({ profiles });
-  } catch (error) {
-    return res.status(500).json({ message: "Error fetching profiles", error });
-  }
-});
-
-app.post("/send-like", async (req, res) => {
-  const { currentUserId, selectedUserId } = req.body;
-
-  try {
-    //update the recepient's friendRequestsArray!
-    await User.findByIdAndUpdate(selectedUserId, {
-      $push: { recievedLikes: currentUserId },
-    });
-    //update the sender's sentFriendRequests array
-    await User.findByIdAndUpdate(currentUserId, {
-      $push: { crushes: selectedUserId },
-    });
-
-    res.sendStatus(200);
-  } catch (error) {
-    res.sendStatus(500);
-  }
-});
-
-//ednpoint to get the details of the received Likes
-app.get("/received-likes/:userId/details", async (req, res) => {
-  const { userId } = req.params;
-
-  try {
-    // Find the user by ID
     const user = await User.findById(userId);
+    const likedUser = await User.findById(likedUserId);
 
-    if (!user) {
+    if (!user || !likedUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Fetch details of users who liked the current user
-    const receivedLikesDetails = [];
-    for (const likedUserId of user.recievedLikes) {
-      const likedUser = await User.findById(likedUserId);
-      if (likedUser) {
-        receivedLikesDetails.push(likedUser);
-      }
-    }
-
-    res.status(200).json({ receivedLikesDetails });
-  } catch (error) {
-    res.status(500).json({
-      message: "Error fetching received likes details",
-      error: error.message,
-    });
-  }
-});
-
-//endpoint to create a match betweeen two people
-app.post("/create-match", async (req, res) => {
-  try {
-    const { currentUserId, selectedUserId } = req.body;
-
-    //update the selected user's crushes array and the matches array
-    await User.findByIdAndUpdate(selectedUserId, {
-      $push: { matches: currentUserId },
-      $pull: { crushes: currentUserId },
-    });
-
-    //update the current user's matches array recievedlikes array
-    await User.findByIdAndUpdate(currentUserId, {
-      $push: { matches: selectedUserId },
-      $pull: { recievedLikes: selectedUserId },
-    });
-
-    res.sendStatus(200);
-  } catch (error) {
-    res.status(500).json({ message: "Error creating a match", error });
-  }
-});
-
-//endpoint to get all the matches of the particular user
-app.get("/users/:userId/matches", async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const matchIds = user.matches;
-
-    const matches = await User.find({ _id: { $in: matchIds } });
-
-    res.status(200).json({ matches });
-  } catch (error) {
-    res.status(500).json({ message: "Error retrieving the matches", error });
-  }
-});
-
-io.on("connection", (socket) => {
-  console.log("a user is connected");
-
-  socket.on("sendMessage", async (data) => {
-    try {
-      const { senderId, receiverId, message } = data;
-
-      console.log("data", data);
-
-      const newMessage = new Chat({ senderId, receiverId, message });
-      await newMessage.save();
-
-      //emit the message to the receiver
-      io.to(receiverId).emit("receiveMessage", newMessage);
-    } catch (error) {
-      console.log("Error handling the messages");
-    }
-    socket.on("disconnet", () => {
-      console.log("user disconnected");
-    });
-  });
-});
-
-http.listen(8000, () => {
-  console.log("Socket.IO server running on port 8000");
-});
-
-app.get("/messages", async (req, res) => {
-  try {
-    const { senderId, receiverId } = req.query;
-
-    console.log(senderId);
-    console.log(receiverId);
-
-    const messages = await Chat.find({
-      $or: [
-        { senderId: senderId, receiverId: receiverId },
-        { senderId: receiverId, receiverId: senderId },
-      ],
-    }).populate("senderId", "_id name");
-
-    res.status(200).json(messages);
-  } catch (error) {
-    res.status(500).json({ message: "Error in getting messages", error });
-  }
-});
-
-
-//endpoint to delete the messages;
-
-app.post("/delete",async(req,res) => {
-    try{
-        const {messages} = req.body;
-
-        if(!Array.isArray(messages) || messages.length == 0){
-            return res.status(400).json({message:"Invalid request body"})
-        };
-
-        for(const messageId of messages){
-            await Chat.findByIdAndDelete(messageId);
-        }
-
-        res.status(200).json({message:"Messages delted successfully!"})
-    } catch(error){
-        res.status(500).json({message:"Internal server error",error})
-    }
-})
-/*
-// Route to initialize payment
-router.post('/pay', async (req, res) => {
-  const { userId, amount } = req.body;
-  try {
-      const paymentLink = await handlePayment(userId, amount);
-      res.json({ success: true, paymentLink });
-  } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Route to verify payment
-router.post('/verify-payment', async (req, res) => {
-  const { transactionId } = req.body;
-  try {
-      const result = await verifyPayment(transactionId);
-      res.json(result);
-  } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
-  }
-});
-module.exports = router;*/
-
-module.exports = app;
-
-
-
-
-
-
-/*
-
-
-
-const express = require("express");
-const bodyParser = require("body-parser");
-const mongoose = require("mongoose");
-const crypto = require("crypto");
-const nodemailer = require("nodemailer");
-const bcrypt = require("bcryptjs");
-
-const app = express();
-
-const cors = require("cors");
-
-const http = require("http").createServer(app);
-const io = require("socket.io")(http);
-
-const jwt = require("jsonwebtoken");
-const cors = require("cors");
-
-const port = process.env.PORT || 3000;
-
-
-app.use(cors());
-
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
-
-const jwt = require("jsonwebtoken");
-const User = require("./models/User");
-const Chat = require("./models/message");
-
-mongoose
-  .connect("process.env.MONGODB_URI")
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((error) => {
-    console.log("Error connecting to MongoDB");
-  });
-
-app.listen(port, () => {
-  console.log("Server is running on 3000");
-});
-
-//endpoint to register a user to the backend
-app.post("/register", async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-
-    //check if the email is already registered
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      console.log("Email already registered");
-      return res.status(400).json({ message: "Email already registered" });
-    }
-
-    //create a new User
-    const newUser = new User({
-      name,
-      email,
-      password,
-    });
-
-    //generate the verification token
-    newUser.verificationToken = crypto.randomBytes(20).toString("hex");
-
-    //save the user to the database
-    await newUser.save();
-
-    //send the verification email to the registered user
-    sendVerificationEmail(newUser.email, newUser.verificationToken);
-
-    res
-      .status(200)
-      .json({ message: "User registered successfully", userId: newUser._id });
-  } catch (error) {
-    console.log("Error registering user", error);
-    res.status(500).json({ message: "Registration failed" });
-  }
-});
-const sendVerificationEmail = async (email, verificationToken) => {
-  const transpoter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
-
-  const mailOptions = {
-    from: "Etok.us",
-    to: email,
-    subject: "Email verification",
-    text: `Please click on the following link to verify your email : http://express-vdh7.onrender.com:${port}/verify/${verificationToken}`,
-  };
-
-  //send the mail
-  try {
-    await transpoter.sendMail(mailOptions);
-  } catch (error) {
-    console.log("Error sending the verification email");
-  }
-};
-
-//verify the user
-app.get("/verify/:token", async (req, res) => {
-  try {
-    const token = req.params.token;
-
-    const user = await User.findOne({ verificationToken: token });
-    if (!user) {
-      return res.status(404).json({ message: "Invalid verification token" });
-    }
-
-    //mark the user as verified
-    user.verified = true;
-    user.verificationToken = undefined;
-
+    user.likes.push(likedUserId);
     await user.save();
 
-    res.status(200).json({ message: "Email verified Sucesfully" });
+    if (likedUser.likes.includes(userId)) {
+      user.matches.push(likedUserId);
+      likedUser.matches.push(userId);
+      await user.save();
+      await likedUser.save();
+    }
+
+    res.status(200).json({ message: "Like recorded successfully" });
   } catch (error) {
-    console.log("errror", error);
-    res.status(500).json({ message: "Email verification failed" });
+    res.status(500).json({ message: "Error recording like", error });
   }
 });
 
-const generateSecretKey = () => {
-  const secretKey = crypto.randomBytes(32).toString("hex");
-
-  return secretKey;
-};
-
-const secretKey = generateSecretKey();
-
-//endpoint to login
-app.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    //check if the user exists already
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
-    }
-
-    //check in password is correct
-    if (user.password !== password) {
-      return res.status(401).json({ message: "Invalide password" });
-    }
-
-    const token = jwt.sign({ userId: user._id }, secretKey);
-
-    res.status(200).json({ token });
-  } catch (error) {
-    res.status(500).json({ message: "login failed" });
-  }
+// Listening to the server
+http.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
 });
-
-//endpoint to change or select the gender for a particular user profile
-app.put("/users/:userId/gender", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { gender } = req.body;
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { gender: gender },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    return res.status(200).json({ message: "User gender updated Succesfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Error updating user gender", error });
-  }
-});
-
-//endpoint to update the user description
-app.put("/users/:userId/description", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { description } = req.body;
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      {
-        description: description,
-      },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    return res
-      .status(200)
-      .json({ message: "User description updated succesfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Error updating user description" });
-  }
-});
-
-//fetch users data
-app.get("/users/:userId", async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(500).json({ message: "User not found" });
-    }
-
-    return res.status(200).json({ user });
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching the user details" });
-  }
-});
-
-//end point to add a turnon for a user in the backend
-app.put("/users/:userId/turn-ons/add", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { turnOn } = req.body;
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { $addToSet: { turnOns: turnOn } },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    return res
-      .status(200)
-      .json({ message: "Turn on updated succesfully", user });
-  } catch (error) {
-    res.status(500).json({ message: "Error adding the turn on" });
-  }
-});
-
-//endpoint to remove a particular turn on for the user
-app.put("/users/:userId/turn-ons/remove", async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const { turnOn } = req.body;
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { $pull: { turnOns: turnOn } },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    return res
-      .status(200)
-      .json({ message: "Turn on removed succesfully", user });
-  } catch (error) {
-    return res.status(500).json({ message: "Error removing turn on" });
-  }
-});
-
-//end point to add a lookingFor  for a user in the backend
-app.put("/users/:userId/looking-for", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { lookingFor } = req.body;
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      {
-        $addToSet: { lookingFor: lookingFor },
-      },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "No user" });
-    }
-
-    return res
-      .status(200)
-      .json({ message: "Looking for updated succesfully".user });
-  } catch (error) {
-    res.status(500).json({ message: "Error updating looking for", error });
-  }
-});
-
-//endpoint to remove looking for in the backend
-app.put("/users/:userId/looking-for/remove", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { lookingFor } = req.body;
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      {
-        $pull: { lookingFor: lookingFor },
-      },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: "No user" });
-    }
-
-    return res
-      .status(200)
-      .json({ message: "Looking for updated succesfully".user });
-  } catch (error) {
-    res.status(500).json({ message: "Error removing looking for", error });
-  }
-});
-
-app.post("/users/:userId/profile-images", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { imageUrl } = req.body;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    user.profileImages.push(imageUrl);
-
-    await user.save();
-
-    return res.status(200).json({ message: "Image has been added", user });
-  } catch (error) {
-    res.status(500).json({ message: "Error addding the profile images" });
-  }
-});
-
-//endpoint to fetch all the profiles for a particular user
-app.get("/profiles", async (req, res) => {
-  const { userId, gender, turnOns, lookingFor } = req.query;
-
-  try {
-    let filter = { gender: gender === "male" ? "female" : "male" }; // For gender filtering
-
-    // Add filtering based on turnOns and lookingFor arrays
-    if (turnOns) {
-      filter.turnOns = { $in: turnOns };
-    }
-
-    if (lookingFor) {
-      filter.lookingFor = { $in: lookingFor };
-    }
-
-    const currentUser = await User.findById(userId)
-      .populate("matches", "_id")
-      .populate("crushes", "_id");
-
-    // Extract IDs of friends
-    const friendIds = currentUser.matches.map((friend) => friend._id);
-
-    // Extract IDs of crushes
-    const crushIds = currentUser.crushes.map((crush) => crush._id);
-
-    const profiles = await User.find(filter)
-      .where("_id")
-      .nin([userId, ...friendIds, ...crushIds]);
-
-    return res.status(200).json({ profiles });
-  } catch (error) {
-    return res.status(500).json({ message: "Error fetching profiles", error });
-  }
-});
-
-app.post("/send-like", async (req, res) => {
-  const { currentUserId, selectedUserId } = req.body;
-
-  try {
-    //update the recepient's friendRequestsArray!
-    await User.findByIdAndUpdate(selectedUserId, {
-      $push: { recievedLikes: currentUserId },
-    });
-    //update the sender's sentFriendRequests array
-    await User.findByIdAndUpdate(currentUserId, {
-      $push: { crushes: selectedUserId },
-    });
-
-    res.sendStatus(200);
-  } catch (error) {
-    res.sendStatus(500);
-  }
-});
-
-//ednpoint to get the details of the received Likes
-app.get("/received-likes/:userId/details", async (req, res) => {
-  const { userId } = req.params;
-
-  try {
-    // Find the user by ID
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Fetch details of users who liked the current user
-    const receivedLikesDetails = [];
-    for (const likedUserId of user.recievedLikes) {
-      const likedUser = await User.findById(likedUserId);
-      if (likedUser) {
-        receivedLikesDetails.push(likedUser);
-      }
-    }
-
-    res.status(200).json({ receivedLikesDetails });
-  } catch (error) {
-    res.status(500).json({
-      message: "Error fetching received likes details",
-      error: error.message,
-    });
-  }
-});
-
-//endpoint to create a match betweeen two people
-app.post("/create-match", async (req, res) => {
-  try {
-    const { currentUserId, selectedUserId } = req.body;
-
-    //update the selected user's crushes array and the matches array
-    await User.findByIdAndUpdate(selectedUserId, {
-      $push: { matches: currentUserId },
-      $pull: { crushes: currentUserId },
-    });
-
-    //update the current user's matches array recievedlikes array
-    await User.findByIdAndUpdate(currentUserId, {
-      $push: { matches: selectedUserId },
-      $pull: { recievedLikes: selectedUserId },
-    });
-
-    res.sendStatus(200);
-  } catch (error) {
-    res.status(500).json({ message: "Error creating a match", error });
-  }
-});
-
-//endpoint to get all the matches of the particular user
-app.get("/users/:userId/matches", async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const matchIds = user.matches;
-
-    const matches = await User.find({ _id: { $in: matchIds } });
-
-    res.status(200).json({ matches });
-  } catch (error) {
-    res.status(500).json({ message: "Error retrieving the matches", error });
-  }
-});
-
-io.on("connection", (socket) => {
-  console.log("a user is connected");
-
-  socket.on("sendMessage", async (data) => {
-    try {
-      const { senderId, receiverId, message } = data;
-
-      console.log("data", data);
-
-      const newMessage = new Chat({ senderId, receiverId, message });
-      await newMessage.save();
-
-      //emit the message to the receiver
-      io.to(receiverId).emit("receiveMessage", newMessage);
-    } catch (error) {
-      console.log("Error handling the messages");
-    }
-    socket.on("disconnect", () => {
-      console.log("user disconnected");
-    });
-  });
-});
-
-http.listen(8000, () => {
-  console.log("Socket.IO server running on port 8000");
-});
-
-app.get("/messages", async (req, res) => {
-  try {
-    const { senderId, receiverId } = req.query;
-
-    console.log(senderId);
-    console.log(receiverId);
-
-    const messages = await Chat.find({
-      $or: [
-        { senderId: senderId, receiverId: receiverId },
-        { senderId: receiverId, receiverId: senderId },
-      ],
-    }).populate("senderId", "_id name");
-
-    res.status(200).json(messages);
-  } catch (error) {
-    res.status(500).json({ message: "Error in getting messages", error });
-  }
-});
-
-
-//endpoint to delete the messages;
-
-app.post("/delete",async(req,res) => {
-    try{
-        const {messages} = req.body;
-
-        if(!Array.isArray(messages) || messages.length == 0){
-            return res.status(400).json({message:"Invalid request body"})
-        };
-
-        for(const messageId of messages){
-            await Chat.findByIdAndDelete(messageId);
-        }
-
-        res.status(200).json({message:"Messages delted successfully!"})
-    } catch(error){
-        res.status(500).json({message:"Internal server error",error})
-    }
-})
-*/
