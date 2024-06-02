@@ -56,6 +56,9 @@ friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   description: {
     type: String,
   },
+  username: {type: String,
+
+  },
   turnOns: [
     {
       type: String, //Array of string for turn ons

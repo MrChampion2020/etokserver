@@ -144,13 +144,13 @@ app.put("/users/:userId/gender", async (req, res) => {
 });
 
 //updating user name
-app.put("/users:userId/name", async (req, res) => {
+app.put("/users:userId/username", async (req, res) => {
 
   try{
     const { userId } =req.params;
-    const { name } = req.body;
+    const { username } = req.body;
 
-    const user = await User.findByIdAndUpdate(userId, { name }, { new: true } );
+    const user = await User.findByIdAndUpdate(userId, { username }, { new: true } );
 
     if (!user){
 
