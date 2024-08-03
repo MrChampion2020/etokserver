@@ -95,7 +95,7 @@ friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   ],
   counrty: {
     type: String,
-    default: Nigeria,
+    default: "Nigeria",
   },
   diamond: {
     type: Number,
