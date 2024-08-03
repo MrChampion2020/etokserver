@@ -5,6 +5,30 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+    default: function () {
+      return this.name.toLowerCase().replace(/\s+/g, "");
+    },
+  },
+  referralLink: { type: String, unique: true },
+  referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  role: { type: String, enum: ['user', 'admin', 'vendor'], default: 'user' },
+  referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  referralLinkActive: { type: Boolean, default: true },
+  accountType: { type: String, default: 'naira' },
+  bankAccount: {
+    accountNumber: String,
+    bankName: String,
+    accountHolderName: String,
+  },
+  age: {
+    type: Number,
+    required: true,
+    default: 18,
+  },
   wallet: {
     type: Number,
     default: 0
@@ -56,9 +80,9 @@ friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   description: {
     type: String,
   },
-  username: {type: String,
+  /*username: {type: String,
 
-  },
+  },*/
   turnOns: [
     {
       type: String, //Array of string for turn ons
@@ -69,8 +93,36 @@ friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
       type: String, // Array of strings for what they are looking for
     },
   ],
-});
+  counrty: {
+    type: String,
+    default: Nigeria,
+  },
+  diamond: {
+    type: Number,
+    default: 0,
+  },
+  walletHistory: {
+    type: String,
+  },
+  isOnline: {
+    type: Boolean,
+    default: false,
+  },
+  lastLogin: { type: Date, default: null },
 
+  currentCall: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Call',
+  }
+}, { timestamps: true });
+
+
+userSchema.pre('save', function(next) {
+  if (!this.referralLink) {
+    this.referralLink = `https://elitearn.com/register?ref=${this.username}`;
+  }
+  next();
+});
 
 const User = mongoose.model("User",userSchema);
 

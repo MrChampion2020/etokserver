@@ -2,6 +2,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
+const path = require('path');
+const multer = require('multer');
 const nodemailer = require("nodemailer");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -15,6 +17,8 @@ const port = process.env.PORT || 3000;
 
 const User = require("./models/User");
 const Chat = require("./models/message");
+const Call = require("./models/Call");
+const CallRecord = require('./models/CallRecord');
 
 // Middleware to parse JSON and URL-encoded data
 app.use(express.json());
@@ -35,6 +39,97 @@ mongoose
 // Generate a secret key for JWT
 const generateSecretKey = () => crypto.randomBytes(32).toString("hex");
 const secretKey = generateSecretKey();
+
+// Fetch the JWT secret key from environment variables
+const jwtSecret = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+
+// Chat and socket.io configuration
+io.on("connection", (socket) => {
+  console.log("A user connected");
+
+  socket.on("sendMessage", async (data) => {
+    try {
+      const { senderId, receiverId, message } = data;
+      const newMessage = new Chat({ senderId, receiverId, message });
+      await newMessage.save();
+
+      io.to(receiverId).emit("receiveMessage", newMessage);
+    } catch (error) {
+      console.log("Error sending message:", error);
+    }
+  });
+
+  socket.on("userOnline", async (userId) => {
+    await User.findByIdAndUpdate(userId, { isOnline: true });
+    socket.join(userId);
+    console.log(`User ${userId} is online`);
+  });
+
+  socket.on("userOffline", async (userId) => {
+    await User.findByIdAndUpdate(userId, { isOnline: false });
+    socket.leave(userId);
+    console.log(`User ${userId} is offline`);
+  });
+
+  socket.on("initiateCall", async (data) => {
+    const { callerId, receiverId, type } = data;
+
+    const call = new Call({ caller: callerId, receiver: receiverId, type });
+    await call.save();
+
+    io.to(receiverId).emit("incomingCall", { callId: call._id, callerId, type });
+    console.log(`Call initiated from ${callerId} to ${receiverId}`);
+  });
+
+  socket.on("acceptCall", async (data) => {
+    const { callId } = data;
+    const call = await Call.findById(callId);
+
+    if (call) {
+      call.status = "accepted";
+      await call.save();
+
+      io.to(call.caller).emit("callAccepted", { callId });
+      io.to(call.receiver).emit("startCall", { callId });
+      console.log(`Call ${callId} accepted`);
+    }
+  });
+
+  socket.on("rejectCall", async (data) => {
+    const { callId } = data;
+    const call = await Call.findById(callId);
+
+    if (call) {
+      call.status = "rejected";
+      await call.save();
+
+      io.to(call.caller).emit("callRejected", { callId });
+      console.log(`Call ${callId} rejected`);
+    }
+  });
+
+  socket.on("endCall", async (data) => {
+    const { callId } = data;
+    const call = await Call.findById(callId);
+
+    if (call) {
+      call.status = "ended";
+      call.endTime = Date.now();
+      await call.save();
+
+      io.to(call.caller).emit("callEnded", { callId });
+      io.to(call.receiver).emit("callEnded", { callId });
+      console.log(`Call ${callId} ended`);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("A user disconnected");
+  });
+});
+
+
+
 
 // Send verification email function
 const sendVerificationEmail = async (email, verificationToken) => {
@@ -89,6 +184,84 @@ app.post("/register", async (req, res) => {
   }
 });
 
+
+
+/*
+app.post("/register", async (req, res) => {
+  try {
+    const { fullName, email, phone, password, username, referralLink, couponCode, accountType = 'naira' } = req.body;
+
+    if (!username) {
+      return res.status(400).json({ message: "Username is required" });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
+
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({ message: "Username already taken" });
+    }
+
+    const coupon = await Coupon.findOne({ code: couponCode });
+    if (!coupon || !coupon.isActive || coupon.isUsed) {
+      return res.status(400).json({ message: "Invalid or inactive coupon code" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({
+      fullName,
+      email,
+      phone,
+      password: hashedPassword,
+      username,
+      verificationToken: crypto.randomBytes(20).toString("hex"),
+      accountType
+    });
+
+    // Generate referral link
+    newUser.referralLink = `${process.env.API_URL}/register?ref=${username}`;
+
+    if (referralLink) {
+      const referrer = await User.findOne({ username: referralLink }) || await Vendor.findOne({ username: referralLink });
+      if (referrer && referrer.referralLinkActive) {
+        newUser.referredBy = referrer._id;
+        referrer.referrals.push(newUser._id);
+
+        // Credit referrer's wallet
+        const amountToCredit = referrer.accountType === 'naira' ? 4000 : 4;
+        referrer.wallet += amountToCredit;
+        await referrer.save();
+      } else {
+        return res.status(400).json({ message: "Invalid or inactive referral link" });
+      }
+    }
+
+    await newUser.save();
+    await sendVerificationEmail(newUser.email, newUser.verificationToken);
+
+    // Mark coupon as used
+    coupon.isUsed = true;
+    coupon.isActive = false;
+    coupon.usedBy = { email: newUser.email, username: newUser.username, phone: newUser.phone };
+    await coupon.save();
+
+    // Distribute referral bonuses
+    await distributeReferralBonusUser(newUser._id, 3, 3); // Assuming 3 levels of referral bonus for both user and vendor
+
+    res.status(200).json({ message: "User registered successfully", userId: newUser._id });
+  } catch (error) {
+    console.log("Error registering user:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({ message: "Duplicate key error", error: error.message });
+    }
+    res.status(500).json({ message: "Registration failed" });
+  }
+});
+*/ 
+
 // Email verification endpoint
 app.get("/verify/:token", async (req, res) => {
   try {
@@ -125,6 +298,168 @@ app.post("/login", async (req, res) => {
     res.status(500).json({ message: "Login failed", error });
   }
 });
+
+
+/*
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user || !await bcrypt.compare(password, user.password)) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const now = new Date();
+    const lastLogin = user.lastLogin || new Date(0);
+    const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
+
+    if (now - lastLogin >= oneDayInMilliseconds) {
+      user.referralWallet += 250;
+      user.lastLogin = now;
+      await user.save();
+    }
+
+    const token = jwt.sign({ userId: user._id }, secretKey, { expiresIn: '1h' });
+
+    res.status(200).json({ message: "Login successful", token });
+  } catch (error) {
+    console.log("Error logging in user:", error);
+    res.status(500).json({ message: "Login failed" });
+  }
+});
+*/
+
+//user auth
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, secretKey, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+app.get("/user-details", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      user: {
+        username: user.username,
+        friends: user.friends,
+        wallet: user.wallet,
+        diamond: user.diamond,
+        referralWallet: user.referralWallet,
+        referrals: user.referrals,
+        referralLink: user.referralLink,
+        bankAccount: user.bankAccount,
+        verified: user.verified,
+        gender: user.gender,
+        crushes: user.crushes,
+        receivedLikes: user.receivedLikes,
+        matches: user.matches,
+        profileImages: user.profileImages,
+        description: user.description,
+        turnOns: user.turnOns,
+        lookingFor: user.lookingFor,
+        isOnline: user.isOnline,
+        currentCall: user.currentCall,
+        callHistory: user.callHistory,
+        walletHistory: user.walletHistory,
+        country: user.country,
+      }
+    });
+  } catch (error) {
+    console.log("Error fetching user details:", error);
+    res.status(500).json({ message: "Error fetching user details", error });
+  }
+});
+
+
+// Configure Multer for File Uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, 'assets/uploads'));
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname)); // Appending extension
+  }
+});
+
+const upload = multer({ storage: storage });
+
+// Serve static files
+app.use('/assets/uploads', express.static(path.join(__dirname, 'assets/uploads')));
+
+// Upload Profile Image
+app.put('/users/:userId/profile-image', upload.single('image'), async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const profileImagePath = `/assets/uploads/${req.file.filename}`;
+
+    const user = await User.findByIdAndUpdate(userId, { profileImage: profileImagePath }, { new: true });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'Profile image updated successfully', user });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Fetch User Details
+app.get('/users/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/*
+app.get("/user-details", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      user: {
+        fullName: user.fullName,
+        email: user.email,
+        username: user.username,
+        phone: user.phone,
+        wallet: user.wallet,
+        referralWallet: user.referralWallet,
+        eliteWallet: user.eliteWallet,
+        referrals: user.referrals,
+        referralLink: user.referralLink,
+      }
+    });
+  } catch (error) {
+    console.log("Error fetching user details:", error);
+    res.status(500).json({ message: "Error fetching user details", error });
+  }
+});
+*/
 
 // Update user endpoints
 app.put("/users/:userId/gender", async (req, res) => {
@@ -259,26 +594,6 @@ app.put("/users/:userId/looking-for/remove", async (req, res) => {
   }
 });
 
-// Chat and socket.io configuration
-io.on("connection", (socket) => {
-  console.log("A user connected");
-
-  socket.on("sendMessage", async (data) => {
-    try {
-      const { senderId, receiverId, message } = data;
-      const newMessage = new Chat({ senderId, receiverId, message });
-      await newMessage.save();
-
-      io.to(receiverId).emit("receiveMessage", newMessage);
-    } catch (error) {
-      console.log("Error sending message:", error);
-    }
-  });
-
-  socket.on("disconnect", () => {
-    console.log("A user disconnected");
-  });
-});
 
 // Like and match endpoints
 app.post("/like", async (req, res) => {
@@ -305,6 +620,86 @@ app.post("/like", async (req, res) => {
     res.status(200).json({ message: "Like recorded successfully" });
   } catch (error) {
     res.status(500).json({ message: "Error recording like", error });
+  }
+});
+
+// Add coin recharge endpoint
+app.post("/recharge", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { amount } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.wallet += amount;
+    await user.save();
+
+    res.status(200).json({ message: "Coins recharged successfully", wallet: user.wallet });
+  } catch (error) {
+    console.log("Error recharging coins:", error);
+    res.status(500).json({ message: "Recharge failed" });
+  }
+});
+
+app.get('/me', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user profile picture
+app.put("/users/:userId/profilePicture", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { profilePicture } = req.body;
+
+    const user = await User.findByIdAndUpdate(userId, { profilePicture }, { new: true });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ message: "User profile picture updated successfully", user });
+  } catch (error) {
+    console.log("Error updating user profile picture:", error);
+    res.status(500).json({ message: "Error updating user profile picture", error });
+  }
+});
+
+// Call routes
+app.post('/calls', async (req, res) => {
+  const { callerId, receiverId, type, status, startTime, endTime } = req.body;
+  try {
+    const callRecord = new CallRecord({ caller: callerId, receiver: receiverId, type, status, startTime, endTime });
+    await callRecord.save();
+    res.status(201).json(callRecord);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/calls/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const callRecords = await CallRecord.find({
+      $or: [{ caller: userId }, { receiver: userId }]
+    }).populate('caller receiver');
+    res.json(callRecords);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
