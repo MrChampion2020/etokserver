@@ -146,7 +146,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     to: email,
     subject: "Email Verification",
     text: `Please click on the following link to verify your email: ${API_URL}/verify/${verificationToken}`,
-    html: `<p style="background-color: purple; color: white; text-decoration: none; font-size: 20; margin: 20px auto; width: 70%; ">Please click on the following link to verify your email: <a href="${API_URL}/verify/${verificationToken}">${API_URL}/verify/${verificationToken}</a>VERIFY</p>`,
+    html: `<p style="background-color: white; color: purple; text-decoration: none; font-size: 20; margin: 20px auto; width: 70%; ">Please click on the following link to verify your email: <a href="${API_URL}/verify/${verificationToken}">${API_URL}/verify/${verificationToken}</a>VERIFY</p>`,
   };
 
   try {
@@ -514,20 +514,23 @@ app.put("/users/:userId/description", async (req, res) => {
   }
 });
 
+
+//fetch users data
 app.get("/users/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+
     const user = await User.findById(userId);
+
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(500).json({ message: "User not found" });
     }
 
-    res.status(200).json({ user });
+    return res.status(200).json({ user });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching user details", error });
+    res.status(500).json({ message: "Error fetching the user details" });
   }
 });
-
 // Add and remove turn-ons endpoints
 app.put("/users/:userId/turn-ons/add", async (req, res) => {
   try {
@@ -704,6 +707,7 @@ app.get('/calls/:userId', async (req, res) => {
 });
 
 
+
 //endpoint to fetch all the profiles for a particular user
 app.get("/profiles", async (req, res) => {
   const { userId, gender, turnOns, lookingFor } = req.query;
@@ -833,6 +837,8 @@ app.get("/users/:userId/matches", async (req, res) => {
   }
 });
 
+
+/*
 io.on("connection", (socket) => {
   console.log("a user is connected");
 
@@ -855,6 +861,77 @@ io.on("connection", (socket) => {
     });
   });
 });
+
+
+*/
+
+io.on("connection", (socket) => {
+  console.log("a user is connected");
+
+  socket.on("sendMessage", async (data) => {
+    try {
+      const { senderId, receiverId, message } = data;
+
+      console.log("data", data);
+
+      const newMessage = new Chat({ senderId, receiverId, message });
+      await newMessage.save();
+
+      //emit the message to the receiver
+      io.to(receiverId).emit("receiveMessage", newMessage);
+    } catch (error) {
+      console.log("Error handling the messages");
+    }
+    socket.on("disconnet", () => {
+      console.log("user disconnected");
+    });
+  });
+});
+
+http.listen(8000, () => {
+  console.log("Socket.IO server running on port 8000");
+});
+
+app.get("/messages", async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.query;
+
+    console.log(senderId);
+    console.log(receiverId);
+
+    const messages = await Chat.find({
+      $or: [
+        { senderId: senderId, receiverId: receiverId },
+        { senderId: receiverId, receiverId: senderId },
+      ],
+    }).populate("senderId", "_id name");
+
+    res.status(200).json(messages);
+  } catch (error) {
+    res.status(500).json({ message: "Error in getting messages", error });
+  }
+});
+
+
+//endpoint to delete the messages;
+
+app.post("/delete",async(req,res) => {
+    try{
+        const {messages} = req.body;
+
+        if(!Array.isArray(messages) || messages.length == 0){
+            return res.status(400).json({message:"Invalid request body"})
+        };
+
+        for(const messageId of messages){
+            await Chat.findByIdAndDelete(messageId);
+        }
+
+        res.status(200).json({message:"Messages delted successfully!"})
+    } catch(error){
+        res.status(500).json({message:"Internal server error",error})
+    }
+})
 // Listening to the server
 http.listen(port, () => {
   console.log(`Server is running on port ${port}`);
