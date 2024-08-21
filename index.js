@@ -931,7 +931,7 @@ app.post("/delete",async(req,res) => {
     }
 })
 
-
+/*
 //endpoint to update the user description
 app.put("/users/:userId/description", async (req, res) => {
   try {
@@ -1075,7 +1075,7 @@ app.put("/users/:userId/looking-for/remove", async (req, res) => {
     res.status(500).json({ message: "Error removing looking for", error });
   }
 });
-
+*/
 app.post("/users/:userId/profile-images", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1097,6 +1097,7 @@ app.post("/users/:userId/profile-images", async (req, res) => {
   }
 });
 
+/*
 //endpoint to fetch all the profiles for a particular user
 app.get("/profiles", async (req, res) => {
   const { userId, gender, turnOns, lookingFor } = req.query;
@@ -1151,7 +1152,7 @@ app.post("/send-like", async (req, res) => {
     res.sendStatus(500);
   }
 });
-
+*/
 //ednpoint to get the details of the received Likes
 app.get("/received-likes/:userId/details", async (req, res) => {
   const { userId } = req.params;
@@ -1181,7 +1182,7 @@ app.get("/received-likes/:userId/details", async (req, res) => {
     });
   }
 });
-
+/*
 //endpoint to create a match betweeen two people
 app.post("/create-match", async (req, res) => {
   try {
@@ -1293,7 +1294,7 @@ app.post("/delete",async(req,res) => {
         res.status(500).json({message:"Internal server error",error})
     }
 })
-
+*/
 
 // Listening to the server
 http.listen(port, () => {
